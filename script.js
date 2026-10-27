@@ -8,6 +8,8 @@ const todoList = document.getElementById('todo-list');
 
 // { '2026-10-27': [ { id, text, done }, ... ], ... }
 let todos = loadTodos();
+// 지금 고치는 중인 할 일의 id (없으면 null)
+let editingId = null;
 
 function loadTodos() {
   try {
@@ -50,16 +52,48 @@ function render() {
     check.checked = item.done;
     check.setAttribute('aria-label', '완료 체크');
 
-    const text = document.createElement('span');
-    text.textContent = item.text;
+    const isEditing = item.id === editingId;
+
+    let text;
+    if (isEditing) {
+      text = document.createElement('input');
+      text.type = 'text';
+      text.className = 'edit-input';
+      text.value = item.text;
+      text.setAttribute('aria-label', '할 일 고치기');
+    } else {
+      text = document.createElement('span');
+      text.textContent = item.text;
+    }
+
+    const editButton = document.createElement('button');
+    editButton.type = 'button';
+    editButton.className = isEditing ? 'save-button' : 'edit-button';
+    editButton.textContent = isEditing ? '저장' : '수정';
 
     const del = document.createElement('button');
     del.type = 'button';
+    del.className = 'delete-button';
     del.textContent = '삭제';
 
-    li.append(check, text, del);
+    li.append(check, text, editButton, del);
     todoList.append(li);
   });
+
+  const editInput = todoList.querySelector('.edit-input');
+  if (editInput) editInput.focus();
+}
+
+function saveEdit(li) {
+  const input = li.querySelector('.edit-input');
+  const newText = input.value.trim();
+  if (!newText) return;
+
+  const item = (todos[currentDate()] || []).find((t) => t.id === li.dataset.id);
+  if (item) item.text = newText;
+  editingId = null;
+  saveTodos();
+  render();
 }
 
 function addTodo() {
@@ -77,6 +111,7 @@ function addTodo() {
 }
 
 dateInput.addEventListener('change', () => {
+  editingId = null;
   if (!dateInput.value) dateInput.value = todayString();
   render();
 });
@@ -97,7 +132,15 @@ todoList.addEventListener('click', (event) => {
   if (event.target.matches('input[type="checkbox"]')) {
     const item = items.find((t) => t.id === li.dataset.id);
     if (item) item.done = event.target.checked;
-  } else if (event.target.matches('button')) {
+  } else if (event.target.matches('.edit-button')) {
+    editingId = li.dataset.id;
+    render();
+    return;
+  } else if (event.target.matches('.save-button')) {
+    saveEdit(li);
+    return;
+  } else if (event.target.matches('.delete-button')) {
+    if (editingId === li.dataset.id) editingId = null;
     todos[date] = items.filter((t) => t.id !== li.dataset.id);
     if (todos[date].length === 0) delete todos[date];
   } else {
@@ -106,6 +149,17 @@ todoList.addEventListener('click', (event) => {
 
   saveTodos();
   render();
+});
+
+// 고치는 칸에서 Enter는 저장, Esc는 취소
+todoList.addEventListener('keydown', (event) => {
+  if (!event.target.matches('.edit-input')) return;
+  if (event.key === 'Enter' && !event.isComposing) {
+    saveEdit(event.target.closest('li'));
+  } else if (event.key === 'Escape') {
+    editingId = null;
+    render();
+  }
 });
 
 dateInput.value = todayString();
